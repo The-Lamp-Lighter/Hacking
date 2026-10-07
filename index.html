@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Código de Invasão</title>
+<meta name="description" content="Jogo solo top-down de invasão e resgate, com hack por sequência de setas.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- TÍTULO -->
+  <section class="screen" id="s-title"><div class="center-wrap" id="title-wrap"></div></section>
+
+  <!-- SELEÇÃO DE MISSÃO -->
+  <section class="screen" id="s-select">
+    <div class="sel-wrap">
+      <header class="sel-head">
+        <button class="btn ghost sm" id="sel-back">← Voltar</button>
+        <div id="sel-tabs"></div>
+      </header>
+      <p id="sel-desc" class="mut"></p>
+      <div id="sel-grid"></div>
+    </div>
+  </section>
+
+  <!-- MISSÃO -->
+  <section class="screen" id="s-mission">
+    <div id="mi-view">
+      <canvas id="tac-cv"></canvas>
+      <div id="mi-alarm"></div>
+      <div id="mi-obj" class="mono"></div>
+      <div id="mi-right">
+        <div id="mi-det"><span class="mono">Detecção</span><div class="detbar"><i id="mi-det-fill"></i></div><b id="mi-det-state" class="mono">oculto</b></div>
+        <div id="mi-timer" class="mono"></div>
+        <canvas id="mini-cv"></canvas>
+        <button class="btn sm ghost" id="mi-pause">Pausa [Esc]</button>
+      </div>
+
+      <div id="mi-prompt" class="mono"></div>
+
+      <!-- minigame de hack: sequência de setas -->
+      <div id="mi-hack" class="panel">
+        <div class="hk-head"><b id="hk-name"></b><span id="hk-count" class="mono"></span></div>
+        <div id="hk-seq"></div>
+        <div class="hk-bar"><i id="hk-fill"></i><span id="hk-time" class="mono"></span></div>
+        <div class="hk-foot"><span class="mono">Setas ou WASD · errar reinicia a sequência</span><button class="btn sm ghost" id="hk-cancel">Cancelar [Esc]</button></div>
+      </div>
+
+      <div id="mi-hint" class="mono"></div>
+      <div id="mi-pad">
+        <button data-k="up" aria-label="Cima">▲</button>
+        <button data-k="left" aria-label="Esquerda">◀</button>
+        <button data-k="down" aria-label="Baixo">▼</button>
+        <button data-k="right" aria-label="Direita">▶</button>
+      </div>
+      <div id="mi-btns"><button id="mi-act" aria-label="Hackear">HACK</button><button id="mi-sneak" aria-label="Agachar">AGACHAR</button></div>
+      <div id="mi-overlay"></div>
+    </div>
+  </section>
+
+  <!-- RESULTADO -->
+  <section class="screen" id="s-result"><div class="result-wrap" id="result-wrap"></div></section>
+
+  <div id="toast-root"></div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/hack.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
