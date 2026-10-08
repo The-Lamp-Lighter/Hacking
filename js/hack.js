@@ -18,6 +18,10 @@
   let st = null, hideT = null;
 
   function box() { return $('#mi-hack'); }
+  function flashPenalty(p) {
+    const e = $('#hk-pen'); e.textContent = '−' + String(p).replace('.', ',') + ' s';
+    e.classList.remove('on'); void e.offsetWidth; e.classList.add('on');
+  }
 
   function start(target, cb) {
     const sp = target.spec, seq = [];
@@ -68,6 +72,8 @@
       if (st.i >= st.seq.length) { render(); finish('ok'); return true; }
     } else {
       st.i = 0; st.wrong++; SC.audio.sfx('keybad');
+      const pen = st.target.spec.penalty || 0;
+      if (pen) { st.t = Math.max(0, st.t - pen); flashPenalty(pen); }
       const b = box(); b.classList.remove('bad'); void b.offsetWidth; b.classList.add('bad');
     }
     render(); return true;

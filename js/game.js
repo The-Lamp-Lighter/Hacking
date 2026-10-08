@@ -8,10 +8,9 @@
 (function (SC) {
   'use strict';
   const { $, $$, clamp } = SC;
-  const G_RANGE = 5, G_FOV = 0.55, C_RANGE = 6, C_FOV = 0.38;
+  const { G_FOV, C_FOV } = SC.K;
   const TIER_COL = { 1: '#5ED99B', 2: '#FFD24A', 3: '#FF9548', 4: '#FF7AD9', 5: '#C77DFF' };
-  const THEME = { cyber: '#3FD6FF', bio: '#FF9548', toxic: '#8CFF7A', violet: '#B58CFF' };
-  const SHORT = { p: 'PC', s: 'SRV', m: 'MAINFRAME' };
+  const THEME = SC.THEMES;
   let M = null, stop = null, keys = {}, endT = null;
 
   /* ---------- grade e colisão ---------- */
@@ -78,7 +77,8 @@
       det: 0, maxDet: 0, spotted: 0, seen: false, alarm: false, alarmT: 0, objDone: false,
       intelGot: false, exitHint: 0, hacksOk: 0, hacksFail: 0, near: null,
       sci: m.hostage ? { x: m.hostage.x, y: m.hostage.y, found: false, crumbs: [] } : null,
-      explored: new Uint8Array(m.W * m.H), cx: m.start.x, cy: m.start.y
+      explored: new Uint8Array(m.W * m.H), cx: m.start.x, cy: m.start.y,
+      GR: SC.K.G_RANGE + m.diff.range, CR: SC.K.C_RANGE + m.diff.range * 0.6
     });
     return m;
   }
@@ -97,13 +97,13 @@
     }
     const d = distField(M, cur), v = d[Math.floor(M.exit.x) + Math.floor(M.exit.y) * M.W]; if (v > 0) total += v;
     const doors = Math.min(4, M.doors.filter(x => !x.open).length) * 5;
-    return clamp(total / 2.5 * 1.35 + hackT + doors + 14, 30, 240);
+    return clamp((total / 2.5 * 1.35 + hackT + doors + 14) * M.diff.alarmMul, 25, 240);
   }
   function alarm() {
     if (M.alarm) return;
     M.alarm = true; M.alarmT = routeBudget(); M.det = 1;
     SC.audio.mood('alarm'); SC.audio.sfx('alarm'); SC.shake(); $('#mi-alarm').classList.add('on');
-    SC.toast('Você foi detectado. Termine o objetivo e chegue à extração antes que fechem o perímetro.', 'bad');
+    SC.toast('ICE ativado. Cumpra o objetivo e chegue à extração antes do lockdown.', 'bad');
     objectives();
   }
   function finish(outcome) {
@@ -146,7 +146,7 @@
       } else if (res === 'fail') {
         M.hacksFail++; SC.audio.sfx('bad');
         if (!M.alarm) M.det = clamp(M.det + 0.25, 0, 0.99);
-        SC.toast('Tempo esgotado. O sistema registrou a tentativa.', 'bad');
+        SC.toast('Tempo esgotado. O ICE registrou a tentativa.', 'bad');
       }
     });
   }
@@ -175,14 +175,14 @@
       if (M.alarm) {
         g.rp -= dt; if (g.rp <= 0 || !g.tgt) { g.tgt = nextStep(M, g, p); g.rp = 0.3; }
         const a = Math.atan2(g.tgt.y - g.y, g.tgt.x - g.x); g.a = turnTo(g.a, a, 0.3);
-        slide(M, g, Math.cos(a) * 2.0 * dt, Math.sin(a) * 2.0 * dt, 0.2, true);
+        const cs = SC.K.G_CHASE * M.diff.gSpeed * dt; slide(M, g, Math.cos(a) * cs, Math.sin(a) * cs, 0.2, true);
         if (dist(g, p) < 0.55) return finish('fail');
       } else if (g.pause > 0) g.pause -= dt;
       else {
         const t = { x: g.path[g.wi][0] + 0.5, y: g.path[g.wi][1] + 0.5 }, d = dist(g, t);
         g.a = turnTo(g.a, Math.atan2(t.y - g.y, t.x - g.x), 0.12);
         if (d < 0.06) { g.wi = (g.wi + 1) % g.path.length; g.pause = 0.7; }
-        else { const s = Math.min(d, 1.25 * dt); g.x += (t.x - g.x) / d * s; g.y += (t.y - g.y) / d * s; }
+        else { const s = Math.min(d, SC.K.G_SPEED * M.diff.gSpeed * dt); g.x += (t.x - g.x) / d * s; g.y += (t.y - g.y) / d * s; }
       }
     }
     for (const c of M.cams) c.a = c.a0 + Math.sin(M.time * 0.7 + c.ph) * c.sweep;
@@ -194,10 +194,10 @@
       o.sees = d < range && angDiff(Math.atan2(p.y - o.y, p.x - o.x), o.a) < fov && los(M, o.x, o.y, p.x, p.y);
       if (o.sees) rate = Math.max(rate, SC.lerp(r0, r1, d / range));
     };
-    M.guards.forEach(g => { see(g, G_RANGE, G_FOV, 1.15, 0.4); if (!g.sees && dist(g, p) < 0.9 && los(M, g.x, g.y, p.x, p.y)) { g.sees = true; rate = 1.6; } });
-    M.cams.forEach(c => see(c, C_RANGE, C_FOV, 0.75, 0.4));
+    M.guards.forEach(g => { see(g, M.GR, G_FOV, 1.15, 0.4); if (!g.sees && dist(g, p) < 0.9 && los(M, g.x, g.y, p.x, p.y)) { g.sees = true; rate = 1.6; } });
+    M.cams.forEach(c => see(c, M.CR, C_FOV, 0.75, 0.4));
     if (!M.alarm) {
-      rate *= p.crouch ? 0.55 : 1;
+      rate *= (p.crouch ? 0.55 : 1) * M.diff.det;
       if (rate > 0 && !M.seen) { M.spotted++; SC.audio.sfx('spotted'); }
       M.seen = rate > 0;
       M.det = clamp(M.det + (rate > 0 ? rate : -0.28) * dt, 0, 1);
@@ -244,9 +244,9 @@
   function hud() {
     const p = M.p;
     $('#mi-det-fill').style.width = (M.det * 100) + '%';
-    const st = M.alarm ? 'alarme' : M.det > 0.6 ? 'quase visto' : M.seen ? 'suspeita' : p.crouch ? 'agachado' : 'oculto';
+    const st = M.alarm ? 'ICE ativo' : M.det > 0.6 ? 'quase rastreado' : M.seen ? 'ping' : p.crouch ? 'furtivo' : 'fantasma';
     $('#mi-det-state').textContent = st; $('#mi-det').dataset.s = M.alarm ? 'alarm' : M.det > 0.6 ? 'hi' : M.seen ? 'mid' : 'lo';
-    $('#mi-timer').textContent = M.alarm ? 'perímetro fecha em ' + Math.max(0, M.alarmT).toFixed(1) + ' s' : '';
+    $('#mi-timer').textContent = M.alarm ? 'lockdown em ' + Math.max(0, M.alarmT).toFixed(1) + ' s' : '';
     const pr = $('#mi-prompt');
     if (M.near && !SC.hack.active() && M.phase === 'play') {
       const s = M.near.spec;
@@ -316,7 +316,7 @@
   }
   function drawTerm(ctx, t, s, time) {
     const col = t.done ? '#5ED99B' : TIER_COL[t.spec.tier];
-    mark(ctx, t.x * s, t.y * s, s * 0.32, col, t.done ? 'hackeado' : SHORT[t.kind] + ' ' + t.spec.len, time);
+    mark(ctx, t.x * s, t.y * s, s * 0.32, col, t.done ? 'hackeado' : t.spec.short + ' ' + t.spec.len, time);
   }
 
   function drawTac(cv, t) {
@@ -330,8 +330,8 @@
     ctx.fillStyle = 'rgba(63,214,255,.07)';                                  /* malha de piso */
     for (let y = r.y0; y <= r.y1 + 1; y++) for (let x = r.x0; x <= r.x1 + 1; x++) ctx.fillRect(x * s - 1, y * s - 1, 2, 2);
     const onScr = (o, rg) => { const X = o.x * s + v.ox, Y = o.y * s + v.oy, m = rg * s; return X > -m && X < w + m && Y > -m && Y < h + m; };
-    M.cams.forEach(c => { if (onScr(c, C_RANGE)) cone(ctx, M, c, C_RANGE, C_FOV, s, c.sees); });
-    M.guards.forEach(g => { if (onScr(g, G_RANGE)) cone(ctx, M, g, G_RANGE, G_FOV, s, g.sees || M.alarm); });
+    M.cams.forEach(c => { if (onScr(c, M.CR)) cone(ctx, M, c, M.CR, C_FOV, s, c.sees); });
+    M.guards.forEach(g => { if (onScr(g, M.GR)) cone(ctx, M, g, M.GR, G_FOV, s, g.sees || M.alarm); });
     drawMap(ctx, M, s, col, false, r);
     const sy = (t * 0.25 % 1) * M.H * s;                                     /* varredura */
     ctx.fillStyle = 'rgba(63,214,255,.10)'; ctx.fillRect(0, sy, M.W * s, 2);
@@ -452,22 +452,31 @@
     } else { M.phase = 'play'; ov.className = ''; ov.innerHTML = ''; }
   }
   function briefing() {
-    const d = M.def, ov = $('#mi-overlay');
+    const d = M.def, D = M.diff, ov = $('#mi-overlay');
     const rng = (a, b) => a === b ? a + ' teclas' : a + ' a ' + b + ' teclas';
     const lines = [];
     if (M.terms.length) lines.push(`<li><b>${M.terms.length} terminal${M.terms.length > 1 ? 'is' : ''}</b>: ${rng(d.termMin, d.termMax)}</li>`);
     if (M.doors.length) lines.push(`<li><b>${M.doors.length} porta${M.doors.length > 1 ? 's' : ''} trancada${M.doors.length > 1 ? 's' : ''}</b>: ${rng(d.doorMin, d.doorMax)}</li>`);
+    const rules = [];
+    if (D.penalty) rules.push(`cada tecla errada custa ${String(D.penalty).replace('.', ',')} s`);
+    if (D.all12) rules.push('todo hack tem 12 teclas');
     ov.className = 'on';
-    ov.innerHTML = `<div class="panel mi-card"><p class="mono kick">${SC.esc(d.kind)}, ${SC.esc(d.place)}</p><h3>${SC.esc(d.code)}</h3><p>${SC.esc(d.brief)}</p>
-      <ul class="bul"><li>${SC.esc(M.mode === 'infil' ? d.goal + (M.terms.length > 1 ? ` (${M.terms.length})` : '') : d.goal)}</li><li>${SC.esc(d.goal2)}</li><li>${SC.esc(d.opt)}</li></ul>
-      ${lines.length ? `<p class="mono kick" style="margin-top:12px">Sequências de hack neste mapa</p><ul class="bul">${lines.join('')}</ul>` : ''}
-      <p class="mut small">Cones amarelos são o que guardas e câmeras enxergam. Ficar dentro deles enche a barra de detecção. Agachar reduz o ritmo pela metade. Chegue perto de um terminal ou porta e aperte <b>E</b>: aperte as setas na ordem antes do tempo acabar. Os números nos alvos são o tamanho da sequência, e a cor mostra a dificuldade.</p>
-      <div class="row"><button class="btn primary" id="mi-go">Começar</button><button class="btn ghost" id="mi-back">Voltar</button></div></div>`;
+    ov.innerHTML = `<div class="panel mi-card brief" style="--dc:${D.col}">
+      <div class="br-top"><span class="dpill" style="--dc:${D.col}">${D.name}</span><span class="mono mut">${SC.esc(d.kind)} · ${SC.esc(d.place)}</span></div>
+      <h3>${SC.esc(d.name)}</h3><p class="mono code">${SC.esc(d.code)}</p>
+      <p class="story">${SC.esc(d.story)}</p>
+      <div class="br-cols">
+        <div><p class="mono kick">Objetivos</p><ul class="bul"><li>${SC.esc(M.mode === 'infil' ? d.goal + (M.terms.length > 1 ? ` (${M.terms.length})` : '') : d.goal)}</li><li>${SC.esc(d.goal2)}</li><li>${SC.esc(d.opt)}</li></ul></div>
+        ${lines.length ? `<div><p class="mono kick">Sequências de hack</p><ul class="bul">${lines.join('')}</ul>${rules.length ? `<p class="mono small" style="color:var(--dc)">${SC.esc(rules.join(' · '))}</p>` : ''}</div>` : ''}
+      </div>
+      <p class="mut small">Cones amarelos são o que guardas e câmeras enxergam, e ficar neles enche o rastreamento. Furtivo (Shift) reduz o ritmo pela metade. Perto de um terminal ou porta, aperte <b>E</b> e acerte as setas na ordem antes do tempo acabar. O número em cada alvo é o tamanho da sequência; a cor mostra a dificuldade dele.</p>
+      <div class="row"><button class="btn primary" id="mi-go">Entrar na rede</button><button class="btn ghost" id="mi-back">Voltar</button></div></div>`;
     $('#mi-go').onclick = () => { SC.audio.resume(); SC.audio.sfx('click'); ov.className = ''; ov.innerHTML = ''; M.phase = 'play'; };
     $('#mi-back').onclick = () => { SC.audio.sfx('click'); SC.go('select'); };
   }
 
   SC.mission = { thumb, get: () => M };
+  SC.draw = { drawMap, cone, mark, drawDoor, drawTerm, TIER_COL };
   SC.screen('mission', {
     mood: 'stealth',
     enter(id) {
